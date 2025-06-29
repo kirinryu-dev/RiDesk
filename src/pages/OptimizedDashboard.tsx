@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 import { useUserActivity } from '../hooks/useUserActivity';
 import { usePlatformStats, useUserStats } from '../hooks/useOptimizedQuery';
 import { 
@@ -17,6 +17,7 @@ import RecentActivity from '../components/RecentActivity';
 import PlatformUpdates from '../components/PlatformUpdates';
 import AvailableResources from '../components/AvailableResources';
 import SubscriptionStatus from '../components/SubscriptionStatus';
+import DatabasePerformanceMonitor from '../components/DatabasePerformanceMonitor';
 
 const OptimizedDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -123,6 +124,11 @@ const OptimizedDashboard: React.FC = () => {
           <AvailableResources />
         </div>
       </div>
+
+      {/* Database Performance Monitor (only for admins in development) */}
+      {user?.role === 'admin' && import.meta.env.DEV && (
+        <DatabasePerformanceMonitor />
+      )}
     </div>
   );
 };

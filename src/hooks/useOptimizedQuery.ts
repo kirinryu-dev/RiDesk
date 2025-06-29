@@ -20,8 +20,23 @@ interface QueryResult<T> {
   refetch: () => Promise<void>;
 }
 
-// Simple in-memory cache
+// Simple in-memory cache with size limit
+const MAX_CACHE_SIZE = 100;
 const queryCache = new Map<string, { data: any; timestamp: number; staleTime: number }>();
+
+// Cache cleanup function
+const cleanupCache = () => {
+  if (queryCache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(queryCache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    
+    // Remove oldest 20% of entries
+    const toRemove = Math.floor(MAX_CACHE_SIZE * 0.2);
+    for (let i = 0; i < toRemove; i++) {
+      queryCache.delete(entries[i][0]);
+    }
+  }
+};
 
 export function useOptimizedQuery<T>(
   queryFn: () => Promise<T>,
@@ -73,6 +88,7 @@ export function useOptimizedQuery<T>(
           timestamp: Date.now(),
           staleTime
         });
+        cleanupCache();
       }
 
       setData(result);
@@ -120,28 +136,17 @@ export function useOptimizedQuery<T>(
   return { data, isLoading, error, refetch };
 }
 
-// Optimized mission queries with better error handling
+// Optimized mission queries using the new database functions
 export const useMissions = (filters: { level?: string; search?: string } = {}) => {
   return useOptimizedQuery(
     async () => {
       try {
-        let query = supabase
-          .from('missions')
-          .select('id, title, description, level, tags, estimated_hours, reward, status, created_at')
-          .eq('status', 'available')
-          .order('created_at', { ascending: false })
-          .limit(50); // Limit results for better performance
-
-        if (filters.level) {
-          query = query.eq('level', filters.level);
-        }
-
-        if (filters.search) {
-          // Use simpler search to avoid RLS issues
-          query = query.ilike('title', `%${filters.search}%`);
-        }
-
-        const { data, error } = await query;
+        // Use the optimized search function from the database
+        const { data, error } = await supabase.rpc('search_missions_optimized', {
+          search_term: filters.search || null,
+          level_filter: filters.level || null,
+          limit_count: 50
+        });
         
         if (error) {
           console.error('Missions query error:', error);
@@ -151,13 +156,84 @@ export const useMissions = (filters: { level?: string; search?: string } = {}) =
         return data || [];
       } catch (error) {
         console.error('Error in useMissions:', error);
-        throw error;
+        
+        // Fallback to direct query if RPC fails
+        try {
+          let query = supabase
+            .from('missions')
+            .select('id, title, description, level, tags, estimated_hours, reward, status, created_at')
+            .eq('status', 'available')
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+          if (filters.level) {
+            query = query.eq('level', filters.level);
+          }
+
+          if (filters.search) {
+            query = query.ilike('title', `%${filters.search}%`);
+          }
+
+          const { data: fallbackData, error: fallbackError } = await query;
+          
+          if (fallbackError) throw fallbackError;
+          return fallbackData || [];
+        } catch (fallbackError) {
+          console.error('Fallback query also failed:', fallbackError);
+          throw fallbackError;
+        }
       }
     },
     [filters.level, filters.search],
     {
       cacheKey: `missions-${JSON.stringify(filters)}`,
       staleTime: 2 * 60 * 1000, // 2 minutes for missions
+    }
+  );
+};
+
+// Optimized user missions query
+export const useUserMissions = (userId?: string) => {
+  return useOptimizedQuery(
+    async () => {
+      if (!userId) return [];
+
+      try {
+        const { data, error } = await supabase.rpc('get_user_missions_optimized', {
+          user_uuid: userId
+        });
+
+        if (error) {
+          console.error('User missions error:', error);
+          throw error;
+        }
+
+        return data || [];
+      } catch (error) {
+        console.error('Error in useUserMissions:', error);
+        
+        // Fallback to direct query
+        try {
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('missions')
+            .select('id, title, description, level, status, reward, estimated_hours, created_at')
+            .eq('created_by', userId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+          if (fallbackError) throw fallbackError;
+          return fallbackData || [];
+        } catch (fallbackError) {
+          console.error('Fallback user missions query failed:', fallbackError);
+          return [];
+        }
+      }
+    },
+    [userId],
+    {
+      enabled: !!userId,
+      cacheKey: `user-missions-${userId}`,
+      staleTime: 5 * 60 * 1000, // 5 minutes
     }
   );
 };
@@ -225,6 +301,33 @@ export const usePlatformStats = () => {
       cacheKey: 'platform-stats',
       staleTime: 30 * 1000, // 30 seconds
       refetchInterval: 60 * 1000, // Refresh every minute
+    }
+  );
+};
+
+// Database performance monitoring hook
+export const useDatabasePerformance = () => {
+  return useOptimizedQuery(
+    async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_index_report');
+        
+        if (error) {
+          console.error('Database performance error:', error);
+          throw error;
+        }
+        
+        return data;
+      } catch (error) {
+        console.error('Error in useDatabasePerformance:', error);
+        return null;
+      }
+    },
+    [],
+    {
+      cacheKey: 'database-performance',
+      staleTime: 10 * 60 * 1000, // 10 minutes
+      enabled: false // Only enable when explicitly requested
     }
   );
 };
