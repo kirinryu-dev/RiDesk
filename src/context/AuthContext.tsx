@@ -17,6 +17,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   isAdmin: () => boolean;
   accessToken: string | null;
 }
@@ -43,16 +44,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Check current session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('Error getting session:', error);
+      }
+      
       if (session) {
         setAccessToken(session.access_token);
         setUser({
           id: session.user.id,
-          name: session.user.email?.split('@')[0] || '',
+          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
           email: session.user.email || '',
           role: session.user.email?.includes('admin') ? 'admin' : 'user',
           department: 'Engineering',
-          avatar: `https://ui-avatars.com/api/?name=${session.user.email?.split('@')[0]}&background=random`
+          avatar: session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${session.user.email?.split('@')[0]}&background=random`
         });
       }
       setIsLoading(false);
@@ -60,20 +65,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session);
+      
       if (session) {
         setAccessToken(session.access_token);
         setUser({
           id: session.user.id,
-          name: session.user.email?.split('@')[0] || '',
+          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
           email: session.user.email || '',
           role: session.user.email?.includes('admin') ? 'admin' : 'user',
           department: 'Engineering',
-          avatar: `https://ui-avatars.com/api/?name=${session.user.email?.split('@')[0]}&background=random`
+          avatar: session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${session.user.email?.split('@')[0]}&background=random`
         });
       } else {
         setUser(null);
         setAccessToken(null);
       }
+      setIsLoading(false);
     });
 
     return () => {
@@ -87,24 +95,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/dashboard`
+        }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Signup error:', error);
+        throw new Error(error.message || 'Signup failed');
+      }
+
+      // Check if user needs to confirm email
+      if (data.user && !data.session) {
+        throw new Error('Please check your email to confirm your account before signing in.');
+      }
 
       if (data.session) {
         setAccessToken(data.session.access_token);
         setUser({
           id: data.session.user.id,
-          name: data.session.user.email?.split('@')[0] || '',
+          name: data.session.user.user_metadata?.name || data.session.user.email?.split('@')[0] || 'User',
           email: data.session.user.email || '',
           role: data.session.user.email?.includes('admin') ? 'admin' : 'user',
           department: 'Engineering',
-          avatar: `https://ui-avatars.com/api/?name=${data.session.user.email?.split('@')[0]}&background=random`
+          avatar: data.session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${data.session.user.email?.split('@')[0]}&background=random`
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Signup failed:', error);
-      throw new Error('Signup failed. Please try again.');
+      throw new Error(error.message || 'Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -118,29 +137,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Login error:', error);
+        throw new Error(error.message || 'Login failed');
+      }
 
       if (data.session) {
         setAccessToken(data.session.access_token);
         setUser({
           id: data.session.user.id,
-          name: data.session.user.email?.split('@')[0] || '',
+          name: data.session.user.user_metadata?.name || data.session.user.email?.split('@')[0] || 'User',
           email: data.session.user.email || '',
           role: data.session.user.email?.includes('admin') ? 'admin' : 'user',
           department: 'Engineering',
-          avatar: `https://ui-avatars.com/api/?name=${data.session.user.email?.split('@')[0]}&background=random`
+          avatar: data.session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${data.session.user.email?.split('@')[0]}&background=random`
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login failed:', error);
-      throw new Error('Login failed. Please check your credentials.');
+      throw new Error(error.message || 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        throw new Error(error.message || 'Failed to send reset email');
+      }
+    } catch (error: any) {
+      console.error('Password reset failed:', error);
+      throw new Error(error.message || 'Failed to send reset email. Please try again.');
+    }
+  };
+
   const logout = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Logout error:', error);
+    }
     setUser(null);
     setAccessToken(null);
   };
@@ -158,6 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         signup,
         logout,
+        resetPassword,
         isAdmin,
         accessToken
       }}
