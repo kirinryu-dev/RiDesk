@@ -244,7 +244,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Login error:', error);
-        throw new Error(error.message);
+        
+        // Provide more specific error messages
+        if (error.message === 'Invalid login credentials') {
+          throw new Error('Invalid email or password. If you just signed up, please check your email for a confirmation link.');
+        } else if (error.message.includes('Email not confirmed')) {
+          throw new Error('Please check your email and click the confirmation link before signing in.');
+        } else if (error.message.includes('signup_disabled')) {
+          throw new Error('New signups are currently disabled. Please contact support.');
+        } else {
+          throw new Error(error.message);
+        }
       }
 
       console.log('Login successful');
@@ -267,11 +277,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Signup error:', error);
-        throw new Error(error.message);
+        
+        // Provide more specific error messages
+        if (error.message.includes('User already registered')) {
+          throw new Error('An account with this email already exists. Please sign in instead.');
+        } else if (error.message.includes('signup_disabled')) {
+          throw new Error('New signups are currently disabled. Please contact support.');
+        } else {
+          throw new Error(error.message);
+        }
       }
 
       if (data.user && !data.session) {
-        throw new Error('Please check your email to confirm your account.');
+        throw new Error('Account created! Please check your email for a confirmation link before signing in.');
       }
 
       console.log('Signup successful');

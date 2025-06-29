@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ExternalLink, Loader2, AlertCircle, Bug } from 'lucide-react';
+import { ExternalLink, Loader2, AlertCircle, Bug, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DebugLogin from '../components/DebugLogin';
 
@@ -49,7 +49,16 @@ const Login: React.FC = () => {
       // Navigation will happen automatically via useEffect when isAuthenticated changes
     } catch (error: any) {
       console.error('Auth error:', error);
-      toast.error(error.message || (isSignup ? 'Signup failed' : 'Login failed'));
+      
+      // Handle specific error cases with helpful messages
+      if (error.message.includes('confirmation link')) {
+        toast.error(error.message, { duration: 6000 });
+      } else if (error.message.includes('already exists')) {
+        toast.error(error.message);
+        setIsSignup(false); // Switch to login mode
+      } else {
+        toast.error(error.message || (isSignup ? 'Signup failed' : 'Login failed'));
+      }
       setIsLoading(false);
     }
   };
@@ -169,14 +178,17 @@ const Login: React.FC = () => {
           </p>
         </div>
 
-        {/* Quick Demo Notice */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        {/* Email Confirmation Notice */}
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
+            <Info className="h-5 w-5 text-amber-400 mr-2 mt-0.5 flex-shrink-0" />
             <div>
-              <h3 className="text-sm font-medium text-blue-800">Quick Demo</h3>
-              <p className="text-sm text-blue-700 mt-1">
-                Use any email and password (6+ chars) to create an account instantly
+              <h3 className="text-sm font-medium text-amber-800">Email Confirmation Required</h3>
+              <p className="text-sm text-amber-700 mt-1">
+                {isSignup 
+                  ? 'After creating your account, check your email for a confirmation link before signing in.'
+                  : 'If you\'re having trouble signing in, make sure you\'ve confirmed your email address.'
+                }
               </p>
             </div>
           </div>
