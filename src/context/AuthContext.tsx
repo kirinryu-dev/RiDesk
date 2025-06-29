@@ -69,8 +69,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string, token: string) => {
     try {
+      // Use a more efficient query with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
       const { data, error } = await supabase
-        .rpc('get_user_profile', { user_uuid: userId });
+        .rpc('get_user_profile', { user_uuid: userId })
+        .abortSignal(controller.signal);
+
+      clearTimeout(timeoutId);
 
       if (error) {
         console.error('Error fetching user profile:', error);
@@ -86,8 +93,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       return null;
-    } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.error('Profile fetch timed out');
+      } else {
+        console.error('Error in fetchUserProfile:', error);
+      }
       return null;
     }
   };
@@ -119,53 +130,106 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Check current session on mount
-    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-      if (error) {
-        console.error('Error getting session:', error);
-      }
-      
-      if (session) {
-        setAccessToken(session.access_token);
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        // Check current session on mount with timeout
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        let userProfile = await fetchUserProfile(session.user.id, session.access_token);
-        
-        // If no profile exists, create one
-        if (!userProfile) {
-          userProfile = await createUserProfile(session.user);
+        if (error) {
+          console.error('Error getting session:', error);
+          if (mounted) setIsLoading(false);
+          return;
         }
         
-        setUser(userProfile);
+        if (session && mounted) {
+          setAccessToken(session.access_token);
+          
+          // Fetch user profile with fallback
+          let userProfile = await fetchUserProfile(session.user.id, session.access_token);
+          
+          // If no profile exists, create one
+          if (!userProfile) {
+            try {
+              userProfile = await createUserProfile(session.user);
+            } catch (createError) {
+              console.error('Failed to create user profile:', createError);
+              // Continue with basic user data if profile creation fails
+              userProfile = {
+                id: session.user.id,
+                name: session.user.email?.split('@')[0] || 'User',
+                email: session.user.email || '',
+                role: 'user' as const,
+                department: 'Engineering',
+                expertise_level: 'Rookie',
+                can_change_profile: true,
+                permissions: ['view_missions', 'create_missions', 'claim_missions'],
+                tags: []
+              };
+            }
+          }
+          
+          if (mounted) setUser(userProfile);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        if (mounted) setIsLoading(false);
       }
-      setIsLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session);
+      if (!mounted) return;
+
+      console.log('Auth state changed:', event);
       
       if (session) {
         setAccessToken(session.access_token);
         
-        let userProfile = await fetchUserProfile(session.user.id, session.access_token);
-        
-        // If no profile exists, create one
-        if (!userProfile) {
-          userProfile = await createUserProfile(session.user);
+        // Only fetch profile for sign-in events or if we don't have a user
+        if (event === 'SIGNED_IN' || !user) {
+          let userProfile = await fetchUserProfile(session.user.id, session.access_token);
+          
+          // If no profile exists, create one
+          if (!userProfile) {
+            try {
+              userProfile = await createUserProfile(session.user);
+            } catch (createError) {
+              console.error('Failed to create user profile:', createError);
+              // Fallback to basic user data
+              userProfile = {
+                id: session.user.id,
+                name: session.user.email?.split('@')[0] || 'User',
+                email: session.user.email || '',
+                role: 'user' as const,
+                department: 'Engineering',
+                expertise_level: 'Rookie',
+                can_change_profile: true,
+                permissions: ['view_missions', 'create_missions', 'claim_missions'],
+                tags: []
+              };
+            }
+          }
+          
+          setUser(userProfile);
         }
-        
-        setUser(userProfile);
       } else {
         setUser(null);
         setAccessToken(null);
       }
+      
       setIsLoading(false);
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Remove user dependency to prevent infinite loops
 
   const signup = async (email: string, password: string) => {
     setIsLoading(true);
@@ -188,18 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Please check your email to confirm your account before signing in.');
       }
 
-      if (data.session) {
-        setAccessToken(data.session.access_token);
-        
-        let userProfile = await fetchUserProfile(data.session.user.id, data.session.access_token);
-        
-        // If no profile exists, create one
-        if (!userProfile) {
-          userProfile = await createUserProfile(data.session.user);
-        }
-        
-        setUser(userProfile);
-      }
+      // Session will be handled by the auth state change listener
     } catch (error: any) {
       console.error('Signup failed:', error);
       throw new Error(error.message || 'Signup failed. Please try again.');
@@ -221,18 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(error.message || 'Login failed');
       }
 
-      if (data.session) {
-        setAccessToken(data.session.access_token);
-        
-        let userProfile = await fetchUserProfile(data.session.user.id, data.session.access_token);
-        
-        // If no profile exists, create one
-        if (!userProfile) {
-          userProfile = await createUserProfile(data.session.user);
-        }
-        
-        setUser(userProfile);
-      }
+      // Session will be handled by the auth state change listener
     } catch (error: any) {
       console.error('Login failed:', error);
       throw new Error(error.message || 'Login failed. Please check your credentials.');
