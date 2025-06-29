@@ -16,6 +16,7 @@ import StatsCard from '../components/StatsCard';
 import RecentActivity from '../components/RecentActivity';
 import PlatformUpdates from '../components/PlatformUpdates';
 import AvailableResources from '../components/AvailableResources';
+import SubscriptionStatus from '../components/SubscriptionStatus';
 
 interface DashboardStats {
   availableMissions: number;
@@ -91,6 +92,11 @@ const Dashboard: React.FC = () => {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.name}!</h1>
         <p className="mt-1 text-gray-600">Here's your mission control dashboard.</p>
+      </div>
+
+      {/* Subscription Status */}
+      <div className="mb-6">
+        <SubscriptionStatus />
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">

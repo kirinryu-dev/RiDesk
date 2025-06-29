@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Save, User, Bell, Lock, Github, GitBranch } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SubscriptionStatus from '../components/SubscriptionStatus';
 
 const UserProfile: React.FC = () => {
   const { user } = useAuth();
@@ -81,6 +82,11 @@ const UserProfile: React.FC = () => {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Developer Profile</h1>
         <p className="mt-1 text-gray-600">Manage your account settings and mission preferences</p>
+      </div>
+
+      {/* Subscription Status */}
+      <div className="mb-6">
+        <SubscriptionStatus />
       </div>
 
       <div className="bg-white shadow rounded-lg overflow-hidden">

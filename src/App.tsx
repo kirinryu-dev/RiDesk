@@ -11,6 +11,8 @@ import MissionForm from './pages/missionForm.page';
 import ClaimPage from './pages/claim.page';
 import AdminPanel from './pages/AdminPanel';
 import UserProfile from './pages/UserProfile';
+import Pricing from './pages/Pricing';
+import Success from './pages/Success';
 import NotFound from './pages/NotFound';
 
 // Components
@@ -51,6 +53,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/success" element={<Success />} />
           <Route element={<Layout />}>
             <Route
               path="/dashboard"
@@ -81,6 +84,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ClaimPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pricing"
+              element={
+                <ProtectedRoute>
+                  <Pricing />
                 </ProtectedRoute>
               }
             />
