@@ -2,57 +2,56 @@ import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Code2, Plus, GitPullRequest, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 interface Activity {
-  id: number;
+  id: string;
   action: string;
   details: string;
   timestamp: Date;
-  type: 'mission_posted' | 'mission_accepted' | 'mission_completed' | 'pr_submitted';
+  type: 'mission_posted' | 'mission_updated';
 }
 
 const RecentActivity: React.FC = () => {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchUserActivity = async () => {
-      try {
-        // In a real app, this would fetch from an activity log table
-        // For now, we'll use mock data based on user actions
-        const mockActivities: Activity[] = [
-          {
-            id: 1,
-            action: 'Posted a mission',
-            details: 'Implement OAuth Authentication - Expert Level',
-            timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-            type: 'mission_posted'
-          },
-          {
-            id: 2,
-            action: 'Accepted mission',
-            details: 'Fix Mobile Responsive Layout',
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3), // 3 hours ago
-            type: 'mission_accepted'
-          },
-          {
-            id: 3,
-            action: 'Submitted PR',
-            details: 'Added unit tests for authentication module',
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-            type: 'pr_submitted'
-          },
-          {
-            id: 4,
-            action: 'Completed mission',
-            details: 'Setup CI/CD Pipeline - $150 earned',
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
-            type: 'mission_completed'
-          },
-        ];
+      if (!user || !accessToken) {
+        setIsLoading(false);
+        return;
+      }
 
-        setActivities(mockActivities);
+      try {
+        // Fetch user's recent missions as activity
+        const { data: missions, error } = await supabase
+          .from('missions')
+          .select('id, title, created_at, updated_at, status')
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (error) {
+          console.error('Error fetching user activity:', error);
+          return;
+        }
+
+        const activityData: Activity[] = missions?.map(mission => ({
+          id: mission.id,
+          action: 'Posted a mission',
+          details: mission.title,
+          timestamp: new Date(mission.created_at),
+          type: 'mission_posted'
+        })) || [];
+
+        setActivities(activityData);
       } catch (error) {
         console.error('Error fetching user activity:', error);
       } finally {
@@ -61,18 +60,14 @@ const RecentActivity: React.FC = () => {
     };
 
     fetchUserActivity();
-  }, [user?.id]);
+  }, [user, accessToken]);
 
   const getActivityIcon = (type: Activity['type']) => {
     switch (type) {
       case 'mission_posted':
         return <Plus className="h-4 w-4 text-blue-600" />;
-      case 'mission_accepted':
+      case 'mission_updated':
         return <Code2 className="h-4 w-4 text-green-600" />;
-      case 'pr_submitted':
-        return <GitPullRequest className="h-4 w-4 text-purple-600" />;
-      case 'mission_completed':
-        return <CheckCircle className="h-4 w-4 text-emerald-600" />;
       default:
         return <Code2 className="h-4 w-4 text-gray-600" />;
     }
@@ -82,12 +77,8 @@ const RecentActivity: React.FC = () => {
     switch (type) {
       case 'mission_posted':
         return 'bg-blue-100 ring-blue-600';
-      case 'mission_accepted':
+      case 'mission_updated':
         return 'bg-green-100 ring-green-600';
-      case 'pr_submitted':
-        return 'bg-purple-100 ring-purple-600';
-      case 'mission_completed':
-        return 'bg-emerald-100 ring-emerald-600';
       default:
         return 'bg-gray-100 ring-gray-600';
     }
@@ -97,7 +88,7 @@ const RecentActivity: React.FC = () => {
     return (
       <div className="animate-pulse">
         <div className="space-y-4">
-          {[...Array(4)].map((_, i) => (
+          {[...Array(3)].map((_, i) => (
             <div key={i} className="flex space-x-3">
               <div className="h-8 w-8 bg-gray-200 rounded-full"></div>
               <div className="flex-1 space-y-2">
@@ -107,6 +98,18 @@ const RecentActivity: React.FC = () => {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (activities.length === 0) {
+    return (
+      <div className="text-center py-6">
+        <Code2 className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-sm font-medium text-gray-900">No recent activity</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Start by creating your first mission!
+        </p>
       </div>
     );
   }

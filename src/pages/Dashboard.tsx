@@ -17,57 +17,58 @@ import RecentActivity from '../components/RecentActivity';
 import PlatformUpdates from '../components/PlatformUpdates';
 import AvailableResources from '../components/AvailableResources';
 import SubscriptionStatus from '../components/SubscriptionStatus';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 interface DashboardStats {
   availableMissions: number;
-  acceptedMissions: number;
+  userMissions: number;
   totalUsers: number;
-  onlineUsers: number;
-  utilizationRate: number;
-  userPRs: number;
+  completedMissions: number;
 }
 
 const Dashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     availableMissions: 0,
-    acceptedMissions: 0,
+    userMissions: 0,
     totalUsers: 0,
-    onlineUsers: 0,
-    utilizationRate: 0,
-    userPRs: 0
+    completedMissions: 0
   });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
+      if (!user || !accessToken) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         // Fetch available missions count
-        const missionsResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/missions?select=count&status=eq.available`, {
-          headers: {
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Prefer': 'count=exact'
-          }
-        });
+        const { count: availableMissionsCount } = await supabase
+          .from('missions')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'available');
 
-        // Fetch user's accepted missions
-        const userMissionsResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/missions?select=count&created_by=eq.${user?.id}`, {
-          headers: {
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Prefer': 'count=exact'
-          }
-        });
+        // Fetch user's created missions
+        const { count: userMissionsCount } = await supabase
+          .from('missions')
+          .select('*', { count: 'exact', head: true })
+          .eq('created_by', user.id);
 
-        // Mock data for other stats (would come from real API endpoints)
+        // Note: We can't get total users count from auth.users due to RLS
+        // This would need to be implemented via a secure function or admin view
+        
         setStats({
-          availableMissions: 12, // Would be from missions count
-          acceptedMissions: 3,   // User's active missions
-          totalUsers: 128,       // Total platform users
-          onlineUsers: 24,       // Currently online users
-          utilizationRate: 76,   // PR completion rate
-          userPRs: 8            // User's total PRs
+          availableMissions: availableMissionsCount || 0,
+          userMissions: userMissionsCount || 0,
+          totalUsers: 0, // Would need admin function to get this
+          completedMissions: 0 // Would need claims table to track this
         });
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
@@ -77,7 +78,7 @@ const Dashboard: React.FC = () => {
     };
 
     fetchDashboardStats();
-  }, [user?.id]);
+  }, [user, accessToken]);
 
   if (isLoading) {
     return (
@@ -104,46 +105,22 @@ const Dashboard: React.FC = () => {
           title="Available Missions"
           value={stats.availableMissions.toString()}
           icon={<Code2 className="h-6 w-6 text-blue-600" />}
-          change="+3"
-          changeType="increase"
         />
         <StatsCard
-          title="Your Accepted Missions"
-          value={stats.acceptedMissions.toString()}
+          title="Your Missions"
+          value={stats.userMissions.toString()}
           icon={<Target className="h-6 w-6 text-teal-600" />}
-          change="+1"
-          changeType="increase"
         />
-        <div className="relative">
-          <StatsCard
-            title="Platform Users"
-            value={stats.totalUsers.toString()}
-            icon={<Users className="h-6 w-6 text-amber-600" />}
-            change="+5"
-            changeType="increase"
-          />
-          <div className="absolute top-2 right-2 group">
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-            <div className="invisible group-hover:visible absolute right-0 top-4 w-32 bg-black text-white text-xs rounded py-1 px-2 z-10">
-              {stats.onlineUsers} users online
-            </div>
-          </div>
-        </div>
-        <div className="relative">
-          <StatsCard
-            title="Utilization Rate"
-            value={`${stats.utilizationRate}%`}
-            icon={<Activity className="h-6 w-6 text-purple-600" />}
-            change="+4%"
-            changeType="increase"
-          />
-          <div className="absolute top-2 right-2 group">
-            <TrendingUp className="w-4 h-4 text-gray-400" />
-            <div className="invisible group-hover:visible absolute right-0 top-5 w-40 bg-black text-white text-xs rounded py-1 px-2 z-10">
-              {stats.userPRs} PRs per user average
-            </div>
-          </div>
-        </div>
+        <StatsCard
+          title="Platform Users"
+          value="--"
+          icon={<Users className="h-6 w-6 text-amber-600" />}
+        />
+        <StatsCard
+          title="Completed Missions"
+          value={stats.completedMissions.toString()}
+          icon={<Activity className="h-6 w-6 text-purple-600" />}
+        />
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">

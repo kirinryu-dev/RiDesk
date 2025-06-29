@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Code2, 
   BookOpen, 
@@ -10,6 +10,8 @@ import {
   Star
 } from 'lucide-react';
 
+// Note: In a real application, these would come from a backend API
+// This represents static resource links that would typically be admin-managed
 interface Resource {
   id: number;
   name: string;
@@ -21,58 +23,56 @@ interface Resource {
 }
 
 const AvailableResources: React.FC = () => {
-  const resources: Resource[] = [
-    {
-      id: 1,
-      name: 'Mission Guidelines',
-      description: 'Best practices for creating and completing missions',
-      type: 'documentation',
-      url: '#',
-      icon: <BookOpen className="h-5 w-5" />,
-      popular: true
-    },
-    {
-      id: 2,
-      name: 'Code Review Tools',
-      description: 'Automated tools for PR review and quality checks',
-      type: 'tool',
-      url: '#',
-      icon: <Code2 className="h-5 w-5" />
-    },
-    {
-      id: 3,
-      name: 'Developer Community',
-      description: 'Connect with other developers and share knowledge',
-      type: 'community',
-      url: '#',
-      icon: <Users className="h-5 w-5" />,
-      popular: true
-    },
-    {
-      id: 4,
-      name: 'Discord Server',
-      description: 'Real-time chat and collaboration space',
-      type: 'community',
-      url: '#',
-      icon: <MessageSquare className="h-5 w-5" />
-    },
-    {
-      id: 5,
-      name: 'GitHub Integration',
-      description: 'Seamless integration with GitHub repositories',
-      type: 'integration',
-      url: '#',
-      icon: <Github className="h-5 w-5" />
-    },
-    {
-      id: 6,
-      name: 'API Documentation',
-      description: 'Complete API reference and examples',
-      type: 'documentation',
-      url: '#',
-      icon: <Zap className="h-5 w-5" />
-    }
-  ];
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // In a real app, this would fetch from your backend
+    const fetchResources = async () => {
+      try {
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // This would typically come from your backend/CMS
+        const staticResources: Resource[] = [
+          {
+            id: 1,
+            name: 'Mission Guidelines',
+            description: 'Best practices for creating and completing missions',
+            type: 'documentation',
+            url: '#',
+            icon: <BookOpen className="h-5 w-5" />,
+            popular: true
+          },
+          {
+            id: 2,
+            name: 'Developer Community',
+            description: 'Connect with other developers and share knowledge',
+            type: 'community',
+            url: '#',
+            icon: <Users className="h-5 w-5" />,
+            popular: true
+          },
+          {
+            id: 3,
+            name: 'GitHub Integration',
+            description: 'Seamless integration with GitHub repositories',
+            type: 'integration',
+            url: '#',
+            icon: <Github className="h-5 w-5" />
+          }
+        ];
+        
+        setResources(staticResources);
+      } catch (error) {
+        console.error('Error fetching resources:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchResources();
+  }, []);
 
   const getResourceColor = (type: Resource['type']) => {
     switch (type) {
@@ -88,6 +88,38 @@ const AvailableResources: React.FC = () => {
         return 'bg-gray-50 text-gray-700 border-gray-200';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="animate-pulse">
+            <div className="border rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <div className="h-10 w-10 bg-gray-200 rounded-md"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-full"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (resources.length === 0) {
+    return (
+      <div className="text-center py-6">
+        <Code2 className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-sm font-medium text-gray-900">No resources available</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Resources will be added soon
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

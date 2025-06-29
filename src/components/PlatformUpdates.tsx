@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Bell, Zap, Shield, Code, Users } from 'lucide-react';
 
+// Note: In a real application, these would come from a backend API
+// For now, keeping minimal static data as this would typically be admin-managed content
 interface PlatformUpdate {
   id: number;
   title: string;
@@ -12,40 +14,39 @@ interface PlatformUpdate {
 }
 
 const PlatformUpdates: React.FC = () => {
-  const updates: PlatformUpdate[] = [
-    {
-      id: 1,
-      title: 'New Mission Categories',
-      description: 'Added AI/ML and DevOps mission categories with specialized rewards',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-      type: 'feature',
-      priority: 'high'
-    },
-    {
-      id: 2,
-      title: 'Enhanced Security',
-      description: 'Implemented two-factor authentication for mission submissions',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-      type: 'security',
-      priority: 'high'
-    },
-    {
-      id: 3,
-      title: 'Community Milestone',
-      description: '1000+ missions completed! Thank you to our amazing developers',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
-      type: 'community',
-      priority: 'medium'
-    },
-    {
-      id: 4,
-      title: 'API Rate Limits',
-      description: 'Updated API rate limits to improve platform performance',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72), // 3 days ago
-      type: 'maintenance',
-      priority: 'low'
-    }
-  ];
+  const [updates, setUpdates] = useState<PlatformUpdate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // In a real app, this would fetch from your backend
+    // For now, we'll simulate an API call with minimal data
+    const fetchUpdates = async () => {
+      try {
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // This would typically come from your backend
+        const mockUpdates: PlatformUpdate[] = [
+          {
+            id: 1,
+            title: 'System Maintenance',
+            description: 'Scheduled maintenance completed successfully',
+            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
+            type: 'maintenance',
+            priority: 'low'
+          }
+        ];
+        
+        setUpdates(mockUpdates);
+      } catch (error) {
+        console.error('Error fetching platform updates:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUpdates();
+  }, []);
 
   const getUpdateIcon = (type: PlatformUpdate['type']) => {
     switch (type) {
@@ -77,18 +78,35 @@ const PlatformUpdates: React.FC = () => {
     }
   };
 
-  const getPriorityBadge = (priority: PlatformUpdate['priority']) => {
-    switch (priority) {
-      case 'high':
-        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">High</span>;
-      case 'medium':
-        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Medium</span>;
-      case 'low':
-        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Low</span>;
-      default:
-        return null;
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="animate-pulse">
+        <div className="space-y-4">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="flex space-x-3">
+              <div className="h-8 w-8 bg-gray-200 rounded-full"></div>
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (updates.length === 0) {
+    return (
+      <div className="text-center py-6">
+        <Bell className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-sm font-medium text-gray-900">No recent updates</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Check back later for platform updates
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flow-root">
@@ -111,10 +129,7 @@ const PlatformUpdates: React.FC = () => {
                 <div className="min-w-0 flex-1 pt-1.5">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <p className="text-sm font-medium text-gray-900">{update.title}</p>
-                        {getPriorityBadge(update.priority)}
-                      </div>
+                      <p className="text-sm font-medium text-gray-900">{update.title}</p>
                       <p className="text-sm text-gray-600">{update.description}</p>
                     </div>
                     <div className="text-right text-sm whitespace-nowrap text-gray-500 ml-4">
@@ -127,14 +142,6 @@ const PlatformUpdates: React.FC = () => {
           </li>
         ))}
       </ul>
-      <div className="mt-6">
-        <button
-          type="button"
-          className="w-full flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-        >
-          View All Updates
-        </button>
-      </div>
     </div>
   );
 };
