@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useUserActivity } from '../hooks/useUserActivity';
 import { 
   Code2, 
   Users, 
@@ -28,6 +29,7 @@ interface DashboardStats {
   availableMissions: number;
   userMissions: number;
   totalUsers: number;
+  onlineUsers: number;
   completedMissions: number;
 }
 
@@ -37,9 +39,13 @@ const Dashboard: React.FC = () => {
     availableMissions: 0,
     userMissions: 0,
     totalUsers: 0,
+    onlineUsers: 0,
     completedMissions: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+
+  // Track user activity
+  useUserActivity();
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
@@ -61,13 +67,19 @@ const Dashboard: React.FC = () => {
           .select('*', { count: 'exact', head: true })
           .eq('created_by', user.id);
 
-        // Note: We can't get total users count from auth.users due to RLS
-        // This would need to be implemented via a secure function or admin view
-        
+        // Fetch platform statistics (total users and online users)
+        const { data: platformStats, error: statsError } = await supabase
+          .rpc('get_platform_stats');
+
+        if (statsError) {
+          console.error('Error fetching platform stats:', statsError);
+        }
+
         setStats({
           availableMissions: availableMissionsCount || 0,
           userMissions: userMissionsCount || 0,
-          totalUsers: 0, // Would need admin function to get this
+          totalUsers: platformStats?.total_users || 0,
+          onlineUsers: platformStats?.online_users || 0,
           completedMissions: 0 // Would need claims table to track this
         });
       } catch (error) {
@@ -78,6 +90,11 @@ const Dashboard: React.FC = () => {
     };
 
     fetchDashboardStats();
+
+    // Refresh stats every 30 seconds to keep online count updated
+    const interval = setInterval(fetchDashboardStats, 30000);
+
+    return () => clearInterval(interval);
   }, [user, accessToken]);
 
   if (isLoading) {
@@ -113,8 +130,10 @@ const Dashboard: React.FC = () => {
         />
         <StatsCard
           title="Platform Users"
-          value="--"
+          value={stats.totalUsers.toString()}
           icon={<Users className="h-6 w-6 text-amber-600" />}
+          tooltip="Online users"
+          onlineCount={stats.onlineUsers}
         />
         <StatsCard
           title="Completed Missions"

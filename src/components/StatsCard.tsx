@@ -7,6 +7,8 @@ interface StatsCardProps {
   icon: React.ReactNode;
   change?: string;
   changeType?: 'increase' | 'decrease' | 'neutral';
+  tooltip?: string;
+  onlineCount?: number;
 }
 
 const StatsCard: React.FC<StatsCardProps> = ({
@@ -14,10 +16,12 @@ const StatsCard: React.FC<StatsCardProps> = ({
   value,
   icon,
   change,
-  changeType = 'neutral'
+  changeType = 'neutral',
+  tooltip,
+  onlineCount
 }) => {
   return (
-    <div className="bg-white overflow-hidden shadow rounded-lg">
+    <div className="bg-white overflow-hidden shadow rounded-lg relative group">
       <div className="p-5">
         <div className="flex items-center">
           <div className="flex-shrink-0">{icon}</div>
@@ -47,6 +51,16 @@ const StatsCard: React.FC<StatsCardProps> = ({
           </div>
         </div>
       </div>
+      
+      {/* Tooltip for online users */}
+      {tooltip && onlineCount !== undefined && (
+        <div className="absolute top-2 right-2 group">
+          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+          <div className="invisible group-hover:visible absolute right-0 top-4 w-32 bg-black text-white text-xs rounded py-1 px-2 z-10 whitespace-nowrap">
+            {onlineCount} users online
+          </div>
+        </div>
+      )}
     </div>
   );
 };
