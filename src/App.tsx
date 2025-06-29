@@ -5,8 +5,8 @@ import { Toaster } from 'react-hot-toast';
 // Pages
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
-import Dashboard from './pages/Dashboard';
-import MissionList from './pages/missionList.page';
+import OptimizedDashboard from './pages/OptimizedDashboard';
+import OptimizedMissionList from './components/OptimizedMissionList';
 import MissionForm from './pages/missionForm.page';
 import ClaimPage from './pages/claim.page';
 import AdminPanel from './pages/AdminPanel';
@@ -19,12 +19,12 @@ import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
-// Context
-import { AuthProvider } from './context/AuthContext';
+// Context - Use optimized version
+import { OptimizedAuthProvider } from './context/OptimizedAuthContext';
 
 function App() {
   return (
-    <AuthProvider>
+    <OptimizedAuthProvider>
       <Router>
         <Toaster 
           position="top-right"
@@ -59,7 +59,7 @@ function App() {
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <OptimizedDashboard />
                 </ProtectedRoute>
               }
             />
@@ -67,7 +67,7 @@ function App() {
               path="/missions"
               element={
                 <ProtectedRoute>
-                  <MissionList />
+                  <OptimizedMissionList />
                 </ProtectedRoute>
               }
             />
@@ -115,7 +115,7 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
-    </AuthProvider>
+    </OptimizedAuthProvider>
   );
 }
 
