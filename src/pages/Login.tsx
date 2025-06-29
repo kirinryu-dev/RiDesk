@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { ExternalLink, Loader2, AlertCircle, Bug } from 'lucide-react';
 import toast from 'react-hot-toast';
+import DebugLogin from '../components/DebugLogin';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ const Login: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSignup, setIsSignup] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [isResetting, setIsResetting] = useState(false);
   const { login, signup, resetPassword, isAuthenticated } = useAuth();
@@ -74,6 +76,24 @@ const Login: React.FC = () => {
       setIsResetting(false);
     }
   };
+
+  if (showDebug) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-6">
+            <button
+              onClick={() => setShowDebug(false)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              ← Back to Login
+            </button>
+          </div>
+          <DebugLogin />
+        </div>
+      </div>
+    );
+  }
 
   if (showForgotPassword) {
     return (
@@ -259,7 +279,7 @@ const Login: React.FC = () => {
             </button>
           </div>
 
-          <div className="text-center">
+          <div className="text-center space-y-2">
             <button
               type="button"
               onClick={() => setIsSignup(!isSignup)}
@@ -267,6 +287,17 @@ const Login: React.FC = () => {
             >
               {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
+            
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowDebug(true)}
+                className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+              >
+                <Bug className="h-4 w-4 mr-1" />
+                Debug Login Issues
+              </button>
+            </div>
           </div>
         </form>
 
