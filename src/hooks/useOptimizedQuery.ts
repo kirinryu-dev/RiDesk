@@ -120,29 +120,39 @@ export function useOptimizedQuery<T>(
   return { data, isLoading, error, refetch };
 }
 
-// Optimized mission queries
+// Optimized mission queries with better error handling
 export const useMissions = (filters: { level?: string; search?: string } = {}) => {
   return useOptimizedQuery(
     async () => {
-      let query = supabase
-        .from('missions')
-        .select('id, title, description, level, tags, estimated_hours, reward, status, created_at')
-        .eq('status', 'available')
-        .order('created_at', { ascending: false })
-        .limit(50); // Limit results for better performance
+      try {
+        let query = supabase
+          .from('missions')
+          .select('id, title, description, level, tags, estimated_hours, reward, status, created_at')
+          .eq('status', 'available')
+          .order('created_at', { ascending: false })
+          .limit(50); // Limit results for better performance
 
-      if (filters.level) {
-        query = query.eq('level', filters.level);
+        if (filters.level) {
+          query = query.eq('level', filters.level);
+        }
+
+        if (filters.search) {
+          // Use simpler search to avoid RLS issues
+          query = query.ilike('title', `%${filters.search}%`);
+        }
+
+        const { data, error } = await query;
+        
+        if (error) {
+          console.error('Missions query error:', error);
+          throw error;
+        }
+        
+        return data || [];
+      } catch (error) {
+        console.error('Error in useMissions:', error);
+        throw error;
       }
-
-      if (filters.search) {
-        query = query.or(`title.ilike.%${filters.search}%, tags.cs.{${filters.search}}`);
-      }
-
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return data || [];
     },
     [filters.level, filters.search],
     {
@@ -152,19 +162,31 @@ export const useMissions = (filters: { level?: string; search?: string } = {}) =
   );
 };
 
-// Optimized user stats
+// Optimized user stats using the new safe function
 export const useUserStats = (userId?: string) => {
   return useOptimizedQuery(
     async () => {
       if (!userId) return null;
 
-      // Use a single optimized query instead of multiple queries
-      const { data, error } = await supabase.rpc('get_user_stats_optimized', {
-        user_id: userId
-      });
+      try {
+        const { data, error } = await supabase.rpc('get_user_stats_optimized', {
+          user_id: userId
+        });
 
-      if (error) throw error;
-      return data;
+        if (error) {
+          console.error('User stats error:', error);
+          throw error;
+        }
+
+        return data;
+      } catch (error) {
+        console.error('Error in useUserStats:', error);
+        // Return default values on error
+        return {
+          created_missions: 0,
+          completed_missions: 0
+        };
+      }
     },
     [userId],
     {
@@ -175,13 +197,28 @@ export const useUserStats = (userId?: string) => {
   );
 };
 
-// Optimized platform stats
+// Optimized platform stats using the new safe function
 export const usePlatformStats = () => {
   return useOptimizedQuery(
     async () => {
-      const { data, error } = await supabase.rpc('get_platform_stats_optimized');
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabase.rpc('get_platform_stats_optimized');
+        
+        if (error) {
+          console.error('Platform stats error:', error);
+          throw error;
+        }
+        
+        return data;
+      } catch (error) {
+        console.error('Error in usePlatformStats:', error);
+        // Return default values on error
+        return {
+          total_users: 0,
+          online_users: 0,
+          available_missions: 0
+        };
+      }
     },
     [],
     {
