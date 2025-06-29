@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Save, User, Bell, Lock, Github, GitBranch } from 'lucide-react';
+import { Save, User, Bell, Lock, Github, GitBranch, AlertCircle, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SubscriptionStatus from '../components/SubscriptionStatus';
 
 const UserProfile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
     department: user?.department || '',
-    github: '',
-    gitlab: '',
-    discord: '',
-    bio: '',
-    expertise: 'Rookie',
+    bio: user?.bio || '',
+    expertise_level: user?.expertise_level || 'Rookie',
+    github_username: user?.github_username || '',
+    gitlab_username: user?.gitlab_username || '',
+    discord_username: user?.discord_username || '',
   });
 
   const [notifications, setNotifications] = useState({
@@ -30,6 +30,8 @@ const UserProfile: React.FC = () => {
     newPassword: '',
     confirmPassword: '',
   });
+
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -46,9 +48,23 @@ const UserProfile: React.FC = () => {
     setSecurity((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Profile updated successfully');
+    
+    if (!user?.can_change_profile) {
+      toast.error('You can only change your profile once per month');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await updateProfile(formData);
+      toast.success('Profile updated successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update profile');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleNotificationsSubmit = (e: React.FormEvent) => {
@@ -77,6 +93,28 @@ const UserProfile: React.FC = () => {
     });
   };
 
+  const getNextChangeDate = () => {
+    if (!user?.last_profile_change) return null;
+    const lastChange = new Date(user.last_profile_change);
+    const nextChange = new Date(lastChange);
+    nextChange.setMonth(nextChange.getMonth() + 1);
+    return nextChange;
+  };
+
+  const getRoleBadge = () => {
+    const roleColors = {
+      admin: 'bg-red-100 text-red-800',
+      moderator: 'bg-purple-100 text-purple-800',
+      user: 'bg-blue-100 text-blue-800'
+    };
+
+    return (
+      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${roleColors[user?.role || 'user']}`}>
+        {user?.role?.toUpperCase()}
+      </span>
+    );
+  };
+
   return (
     <div>
       <div className="mb-6">
@@ -88,6 +126,21 @@ const UserProfile: React.FC = () => {
       <div className="mb-6">
         <SubscriptionStatus />
       </div>
+
+      {/* Profile Change Restriction Notice */}
+      {!user?.can_change_profile && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-yellow-400 mr-2" />
+            <div>
+              <h3 className="text-sm font-medium text-yellow-800">Profile Change Restricted</h3>
+              <p className="text-sm text-yellow-700 mt-1">
+                You can change your profile again on {getNextChangeDate()?.toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="border-b border-gray-200">
@@ -135,13 +188,23 @@ const UserProfile: React.FC = () => {
                 <div className="mr-6">
                   <img
                     className="h-24 w-24 rounded-full"
-                    src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'User'}&size=96`}
+                    src={user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name || 'User'}&size=96`}
                     alt={user?.name || 'User'}
                   />
                 </div>
                 <div>
                   <h2 className="text-lg font-medium text-gray-900">{user?.name}</h2>
-                  <p className="text-sm text-gray-600">{formData.expertise} Developer</p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    {getRoleBadge()}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      user?.expertise_level === 'Expert' ? 'bg-red-100 text-red-800' :
+                      user?.expertise_level === 'Advanced' ? 'bg-purple-100 text-purple-800' :
+                      user?.expertise_level === 'Intermediate' ? 'bg-blue-100 text-blue-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {user?.expertise_level}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     className="mt-2 inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -150,6 +213,24 @@ const UserProfile: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {/* User Tags Display */}
+              {user?.tags && user.tags.length > 0 && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">Special Access Tags</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {user.tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"
+                      >
+                        {tag.tag_name}
+                        {tag.tag_value && `: ${tag.tag_value}`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 gap-6 mt-6 sm:grid-cols-2">
                 <div>
@@ -162,7 +243,8 @@ const UserProfile: React.FC = () => {
                     id="name"
                     value={formData.name}
                     onChange={handleProfileChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    disabled={!user?.can_change_profile}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -176,12 +258,48 @@ const UserProfile: React.FC = () => {
                     id="email"
                     value={formData.email}
                     onChange={handleProfileChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    disabled={true}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-100 cursor-not-allowed sm:text-sm"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Email cannot be changed</p>
+                </div>
+
+                <div>
+                  <label htmlFor="department" className="block text-sm font-medium text-gray-700">
+                    Department
+                  </label>
+                  <input
+                    type="text"
+                    name="department"
+                    id="department"
+                    value={formData.department}
+                    onChange={handleProfileChange}
+                    disabled={!user?.can_change_profile}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="github" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="expertise_level" className="block text-sm font-medium text-gray-700">
+                    Expertise Level
+                  </label>
+                  <select
+                    id="expertise_level"
+                    name="expertise_level"
+                    value={formData.expertise_level}
+                    onChange={handleProfileChange}
+                    disabled={!user?.can_change_profile}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="Rookie">Rookie</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                    <option value="Expert">Expert</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="github_username" className="block text-sm font-medium text-gray-700">
                     GitHub Username
                   </label>
                   <div className="mt-1 relative rounded-md shadow-sm">
@@ -190,18 +308,19 @@ const UserProfile: React.FC = () => {
                     </div>
                     <input
                       type="text"
-                      name="github"
-                      id="github"
-                      value={formData.github}
+                      name="github_username"
+                      id="github_username"
+                      value={formData.github_username}
                       onChange={handleProfileChange}
-                      className="block w-full pl-10 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      disabled={!user?.can_change_profile}
+                      className="block w-full pl-10 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                       placeholder="username"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="gitlab" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="gitlab_username" className="block text-sm font-medium text-gray-700">
                     GitLab Username
                   </label>
                   <div className="mt-1 relative rounded-md shadow-sm">
@@ -210,47 +329,15 @@ const UserProfile: React.FC = () => {
                     </div>
                     <input
                       type="text"
-                      name="gitlab"
-                      id="gitlab"
-                      value={formData.gitlab}
+                      name="gitlab_username"
+                      id="gitlab_username"
+                      value={formData.gitlab_username}
                       onChange={handleProfileChange}
-                      className="block w-full pl-10 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      disabled={!user?.can_change_profile}
+                      className="block w-full pl-10 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                       placeholder="username"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label htmlFor="discord" className="block text-sm font-medium text-gray-700">
-                    Discord Username
-                  </label>
-                  <input
-                    type="text"
-                    name="discord"
-                    id="discord"
-                    value={formData.discord}
-                    onChange={handleProfileChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="username#0000"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="expertise" className="block text-sm font-medium text-gray-700">
-                    Expertise Level
-                  </label>
-                  <select
-                    id="expertise"
-                    name="expertise"
-                    value={formData.expertise}
-                    onChange={handleProfileChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  >
-                    <option value="Rookie">Rookie</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="Expert">Expert</option>
-                  </select>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -263,7 +350,8 @@ const UserProfile: React.FC = () => {
                     rows={3}
                     value={formData.bio}
                     onChange={handleProfileChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    disabled={!user?.can_change_profile}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                     placeholder="Tell us about your development experience and interests"
                   />
                 </div>
@@ -272,11 +360,18 @@ const UserProfile: React.FC = () => {
               <div className="mt-6">
                 <button
                   type="submit"
-                  className="inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  disabled={!user?.can_change_profile || isUpdating}
+                  className="inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save className="mr-2 h-4 w-4" />
-                  Save Changes
+                  {isUpdating ? 'Saving...' : 'Save Changes'}
                 </button>
+                {!user?.can_change_profile && (
+                  <p className="mt-2 text-sm text-gray-500">
+                    <Calendar className="inline h-4 w-4 mr-1" />
+                    Profile changes are limited to once per month
+                  </p>
+                )}
               </div>
             </form>
           )}

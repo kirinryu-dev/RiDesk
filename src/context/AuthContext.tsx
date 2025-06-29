@@ -1,13 +1,29 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient, SupabaseClient, User as SupabaseUser } from '@supabase/supabase-js';
 
+interface UserTag {
+  tag_name: string;
+  tag_value: string | null;
+  granted_at: string;
+  expires_at: string | null;
+}
+
 interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'moderator' | 'user';
   department: string;
-  avatar?: string;
+  avatar_url?: string;
+  bio?: string;
+  expertise_level: string;
+  github_username?: string;
+  gitlab_username?: string;
+  discord_username?: string;
+  last_profile_change?: string;
+  can_change_profile: boolean;
+  permissions: string[];
+  tags: UserTag[];
 }
 
 interface AuthContextType {
@@ -18,7 +34,11 @@ interface AuthContextType {
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateProfile: (profileData: Partial<User>) => Promise<void>;
   isAdmin: () => boolean;
+  isModerator: () => boolean;
+  hasPermission: (permission: string) => boolean;
+  hasTag: (tagName: string) => boolean;
   accessToken: string | null;
 }
 
@@ -47,23 +67,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  const fetchUserProfile = async (userId: string, token: string) => {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_user_profile', { user_uuid: userId });
+
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return null;
+      }
+
+      if (data?.profile) {
+        return {
+          ...data.profile,
+          permissions: data.permissions || [],
+          tags: data.tags || []
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error in fetchUserProfile:', error);
+      return null;
+    }
+  };
+
+  const createUserProfile = async (authUser: SupabaseUser) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .insert({
+          id: authUser.id,
+          name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+          email: authUser.email || '',
+          role: authUser.email?.includes('admin') ? 'admin' : 'user',
+          department: 'Engineering',
+          avatar_url: authUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${authUser.email?.split('@')[0]}&background=random`,
+          expertise_level: 'Rookie'
+        });
+
+      if (error && !error.message.includes('duplicate key')) {
+        console.error('Error creating user profile:', error);
+        throw error;
+      }
+
+      return await fetchUserProfile(authUser.id, '');
+    } catch (error) {
+      console.error('Error in createUserProfile:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     // Check current session on mount
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (error) {
         console.error('Error getting session:', error);
       }
       
       if (session) {
         setAccessToken(session.access_token);
-        setUser({
-          id: session.user.id,
-          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
-          email: session.user.email || '',
-          role: session.user.email?.includes('admin') ? 'admin' : 'user',
-          department: 'Engineering',
-          avatar: session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${session.user.email?.split('@')[0]}&background=random`
-        });
+        
+        let userProfile = await fetchUserProfile(session.user.id, session.access_token);
+        
+        // If no profile exists, create one
+        if (!userProfile) {
+          userProfile = await createUserProfile(session.user);
+        }
+        
+        setUser(userProfile);
       }
       setIsLoading(false);
     });
@@ -74,14 +146,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (session) {
         setAccessToken(session.access_token);
-        setUser({
-          id: session.user.id,
-          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
-          email: session.user.email || '',
-          role: session.user.email?.includes('admin') ? 'admin' : 'user',
-          department: 'Engineering',
-          avatar: session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${session.user.email?.split('@')[0]}&background=random`
-        });
+        
+        let userProfile = await fetchUserProfile(session.user.id, session.access_token);
+        
+        // If no profile exists, create one
+        if (!userProfile) {
+          userProfile = await createUserProfile(session.user);
+        }
+        
+        setUser(userProfile);
       } else {
         setUser(null);
         setAccessToken(null);
@@ -117,14 +190,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.session) {
         setAccessToken(data.session.access_token);
-        setUser({
-          id: data.session.user.id,
-          name: data.session.user.user_metadata?.name || data.session.user.email?.split('@')[0] || 'User',
-          email: data.session.user.email || '',
-          role: data.session.user.email?.includes('admin') ? 'admin' : 'user',
-          department: 'Engineering',
-          avatar: data.session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${data.session.user.email?.split('@')[0]}&background=random`
-        });
+        
+        let userProfile = await fetchUserProfile(data.session.user.id, data.session.access_token);
+        
+        // If no profile exists, create one
+        if (!userProfile) {
+          userProfile = await createUserProfile(data.session.user);
+        }
+        
+        setUser(userProfile);
       }
     } catch (error: any) {
       console.error('Signup failed:', error);
@@ -149,14 +223,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.session) {
         setAccessToken(data.session.access_token);
-        setUser({
-          id: data.session.user.id,
-          name: data.session.user.user_metadata?.name || data.session.user.email?.split('@')[0] || 'User',
-          email: data.session.user.email || '',
-          role: data.session.user.email?.includes('admin') ? 'admin' : 'user',
-          department: 'Engineering',
-          avatar: data.session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${data.session.user.email?.split('@')[0]}&background=random`
-        });
+        
+        let userProfile = await fetchUserProfile(data.session.user.id, data.session.access_token);
+        
+        // If no profile exists, create one
+        if (!userProfile) {
+          userProfile = await createUserProfile(data.session.user);
+        }
+        
+        setUser(userProfile);
       }
     } catch (error: any) {
       console.error('Login failed:', error);
@@ -168,9 +243,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetPassword = async (email: string) => {
     try {
-      // Add timeout and better error handling
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`
@@ -180,7 +254,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Password reset error:', error);
-        // Provide more specific error messages
         if (error.message.includes('rate limit')) {
           throw new Error('Too many reset attempts. Please wait a few minutes before trying again.');
         } else if (error.message.includes('invalid email')) {
@@ -192,7 +265,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Password reset failed:', error);
       
-      // Handle network errors specifically
       if (error.name === 'AbortError') {
         throw new Error('Request timed out. Please check your internet connection and try again.');
       } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
@@ -200,6 +272,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         throw new Error(error.message || 'Failed to send reset email. Please try again.');
       }
+    }
+  };
+
+  const updateProfile = async (profileData: Partial<User>) => {
+    if (!user || !accessToken) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          ...profileData,
+          updated_at: new Date().toISOString(),
+          last_profile_change: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Refresh user profile
+      const updatedProfile = await fetchUserProfile(user.id, accessToken);
+      if (updatedProfile) {
+        setUser(updatedProfile);
+      }
+    } catch (error: any) {
+      console.error('Profile update failed:', error);
+      throw new Error(error.message || 'Failed to update profile');
     }
   };
 
@@ -216,6 +318,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return user?.role === 'admin';
   };
 
+  const isModerator = () => {
+    return user?.role === 'moderator' || user?.role === 'admin';
+  };
+
+  const hasPermission = (permission: string) => {
+    return user?.permissions?.includes(permission) || false;
+  };
+
+  const hasTag = (tagName: string) => {
+    return user?.tags?.some(tag => tag.tag_name === tagName) || false;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -226,7 +340,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signup,
         logout,
         resetPassword,
+        updateProfile,
         isAdmin,
+        isModerator,
+        hasPermission,
+        hasTag,
         accessToken
       }}
     >

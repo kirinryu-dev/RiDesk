@@ -5,13 +5,19 @@ import { useAuth } from '../context/AuthContext';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   adminOnly?: boolean;
+  moderatorOnly?: boolean;
+  requiredPermission?: string;
+  requiredTag?: string;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
-  adminOnly = false 
+  adminOnly = false,
+  moderatorOnly = false,
+  requiredPermission,
+  requiredTag
 }) => {
-  const { isAuthenticated, isAdmin, isLoading } = useAuth();
+  const { isAuthenticated, isAdmin, isModerator, hasPermission, hasTag, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -26,6 +32,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (adminOnly && !isAdmin()) {
+    return <Navigate to="/dashboard" />;
+  }
+
+  if (moderatorOnly && !isModerator()) {
+    return <Navigate to="/dashboard" />;
+  }
+
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    return <Navigate to="/dashboard" />;
+  }
+
+  if (requiredTag && !hasTag(requiredTag)) {
     return <Navigate to="/dashboard" />;
   }
 
