@@ -67,64 +67,91 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
-  const fetchUserProfile = async (userId: string, token: string) => {
+  // Simple direct query instead of RPC for better performance
+  const fetchUserProfile = async (userId: string) => {
     try {
-      // Use a more efficient query with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      console.log('Fetching profile for user:', userId);
+      
+      // Direct query to users table - much faster than RPC
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-      const { data, error } = await supabase
-        .rpc('get_user_profile', { user_uuid: userId })
-        .abortSignal(controller.signal);
-
-      clearTimeout(timeoutId);
-
-      if (error) {
-        console.error('Error fetching user profile:', error);
+      if (userError) {
+        console.error('Error fetching user:', userError);
         return null;
       }
 
-      if (data?.profile) {
-        return {
-          ...data.profile,
-          permissions: data.permissions || [],
-          tags: data.tags || []
-        };
+      if (!userData) {
+        console.log('No user data found');
+        return null;
       }
 
-      return null;
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.error('Profile fetch timed out');
-      } else {
-        console.error('Error in fetchUserProfile:', error);
-      }
+      // Get permissions for the user's role
+      const { data: permissions } = await supabase
+        .from('role_permissions')
+        .select('permission_name')
+        .eq('role', userData.role)
+        .eq('is_active', true);
+
+      // Get user tags
+      const { data: tags } = await supabase
+        .from('user_tags')
+        .select('tag_name, tag_value, granted_at, expires_at')
+        .eq('user_id', userId)
+        .eq('is_active', true);
+
+      const userProfile: User = {
+        ...userData,
+        can_change_profile: !userData.last_profile_change || 
+          new Date(userData.last_profile_change) < new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+        permissions: permissions?.map(p => p.permission_name) || [],
+        tags: tags || []
+      };
+
+      console.log('Profile fetched successfully:', userProfile.name);
+      return userProfile;
+    } catch (error) {
+      console.error('Error in fetchUserProfile:', error);
       return null;
     }
   };
 
-  const createUserProfile = async (authUser: SupabaseUser) => {
+  const createBasicUser = async (authUser: SupabaseUser) => {
     try {
+      console.log('Creating basic user profile for:', authUser.email);
+      
+      const userData = {
+        id: authUser.id,
+        name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+        email: authUser.email || '',
+        role: 'user' as const,
+        department: 'Engineering',
+        avatar_url: authUser.user_metadata?.avatar_url || 
+          `https://ui-avatars.com/api/?name=${authUser.email?.split('@')[0]}&background=random`,
+        expertise_level: 'Rookie'
+      };
+
       const { error } = await supabase
         .from('users')
-        .insert({
-          id: authUser.id,
-          name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-          email: authUser.email || '',
-          role: authUser.email?.includes('admin') ? 'admin' : 'user',
-          department: 'Engineering',
-          avatar_url: authUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${authUser.email?.split('@')[0]}&background=random`,
-          expertise_level: 'Rookie'
-        });
+        .insert(userData);
 
       if (error && !error.message.includes('duplicate key')) {
-        console.error('Error creating user profile:', error);
+        console.error('Error creating user:', error);
         throw error;
       }
 
-      return await fetchUserProfile(authUser.id, '');
+      // Return basic user profile without additional queries
+      return {
+        ...userData,
+        can_change_profile: true,
+        permissions: ['view_missions', 'create_missions', 'claim_missions'],
+        tags: []
+      };
     } catch (error) {
-      console.error('Error in createUserProfile:', error);
+      console.error('Error creating basic user:', error);
       throw error;
     }
   };
@@ -132,94 +159,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    const initializeAuth = async () => {
+    const initAuth = async () => {
       try {
-        // Check current session on mount with timeout
-        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('Initializing auth...');
         
-        if (error) {
-          console.error('Error getting session:', error);
-          if (mounted) setIsLoading(false);
-          return;
-        }
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (session && mounted) {
+          console.log('Session found, setting up user...');
           setAccessToken(session.access_token);
           
-          // Fetch user profile with fallback
-          let userProfile = await fetchUserProfile(session.user.id, session.access_token);
+          // Try to get user profile quickly
+          let userProfile = await fetchUserProfile(session.user.id);
           
-          // If no profile exists, create one
-          if (!userProfile) {
-            try {
-              userProfile = await createUserProfile(session.user);
-            } catch (createError) {
-              console.error('Failed to create user profile:', createError);
-              // Continue with basic user data if profile creation fails
-              userProfile = {
-                id: session.user.id,
-                name: session.user.email?.split('@')[0] || 'User',
-                email: session.user.email || '',
-                role: 'user' as const,
-                department: 'Engineering',
-                expertise_level: 'Rookie',
-                can_change_profile: true,
-                permissions: ['view_missions', 'create_missions', 'claim_missions'],
-                tags: []
-              };
-            }
+          if (!userProfile && mounted) {
+            console.log('No profile found, creating basic user...');
+            userProfile = await createBasicUser(session.user);
           }
           
-          if (mounted) setUser(userProfile);
+          if (userProfile && mounted) {
+            setUser(userProfile);
+          }
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('Auth init error:', error);
       } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) {
+          console.log('Auth initialization complete');
+          setIsLoading(false);
+        }
       }
     };
 
-    initializeAuth();
+    initAuth();
 
-    // Listen for auth state changes
+    // Auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      console.log('Auth state changed:', event);
+      console.log('Auth event:', event);
       
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setAccessToken(null);
+        setIsLoading(false);
+        return;
+      }
+
       if (session) {
         setAccessToken(session.access_token);
         
-        // Only fetch profile for sign-in events or if we don't have a user
-        if (event === 'SIGNED_IN' || !user) {
-          let userProfile = await fetchUserProfile(session.user.id, session.access_token);
+        if (event === 'SIGNED_IN') {
+          // For sign in, get user profile
+          let userProfile = await fetchUserProfile(session.user.id);
           
-          // If no profile exists, create one
           if (!userProfile) {
-            try {
-              userProfile = await createUserProfile(session.user);
-            } catch (createError) {
-              console.error('Failed to create user profile:', createError);
-              // Fallback to basic user data
-              userProfile = {
-                id: session.user.id,
-                name: session.user.email?.split('@')[0] || 'User',
-                email: session.user.email || '',
-                role: 'user' as const,
-                department: 'Engineering',
-                expertise_level: 'Rookie',
-                can_change_profile: true,
-                permissions: ['view_missions', 'create_missions', 'claim_missions'],
-                tags: []
-              };
-            }
+            userProfile = await createBasicUser(session.user);
           }
           
-          setUser(userProfile);
+          if (userProfile) {
+            setUser(userProfile);
+          }
         }
-      } else {
-        setUser(null);
-        setAccessToken(null);
       }
       
       setIsLoading(false);
@@ -229,91 +230,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []); // Remove user dependency to prevent infinite loops
-
-  const signup = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`
-        }
-      });
-
-      if (error) {
-        console.error('Signup error:', error);
-        throw new Error(error.message || 'Signup failed');
-      }
-
-      // Check if user needs to confirm email
-      if (data.user && !data.session) {
-        throw new Error('Please check your email to confirm your account before signing in.');
-      }
-
-      // Session will be handled by the auth state change listener
-    } catch (error: any) {
-      console.error('Signup failed:', error);
-      throw new Error(error.message || 'Signup failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, []);
 
   const login = async (email: string, password: string) => {
+    console.log('Starting login for:', email);
     setIsLoading(true);
+    
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
       if (error) {
         console.error('Login error:', error);
-        throw new Error(error.message || 'Login failed');
+        throw new Error(error.message);
       }
 
-      // Session will be handled by the auth state change listener
+      console.log('Login successful');
     } catch (error: any) {
       console.error('Login failed:', error);
-      throw new Error(error.message || 'Login failed. Please check your credentials.');
-    } finally {
       setIsLoading(false);
+      throw error;
+    }
+  };
+
+  const signup = async (email: string, password: string) => {
+    console.log('Starting signup for:', email);
+    setIsLoading(true);
+    
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password
+      });
+
+      if (error) {
+        console.error('Signup error:', error);
+        throw new Error(error.message);
+      }
+
+      if (data.user && !data.session) {
+        throw new Error('Please check your email to confirm your account.');
+      }
+
+      console.log('Signup successful');
+    } catch (error: any) {
+      console.error('Signup failed:', error);
+      setIsLoading(false);
+      throw error;
     }
   };
 
   const resetPassword = async (email: string) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`
       });
 
-      clearTimeout(timeoutId);
-
       if (error) {
-        console.error('Password reset error:', error);
-        if (error.message.includes('rate limit')) {
-          throw new Error('Too many reset attempts. Please wait a few minutes before trying again.');
-        } else if (error.message.includes('invalid email')) {
-          throw new Error('Please enter a valid email address.');
-        } else {
-          throw new Error(error.message || 'Failed to send reset email');
-        }
+        throw new Error(error.message);
       }
     } catch (error: any) {
-      console.error('Password reset failed:', error);
-      
-      if (error.name === 'AbortError') {
-        throw new Error('Request timed out. Please check your internet connection and try again.');
-      } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        throw new Error('Network error. Please check your internet connection and try again.');
-      } else {
-        throw new Error(error.message || 'Failed to send reset email. Please try again.');
-      }
+      throw error;
     }
   };
 
@@ -337,7 +316,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Refresh user profile
-      const updatedProfile = await fetchUserProfile(user.id, accessToken);
+      const updatedProfile = await fetchUserProfile(user.id);
       if (updatedProfile) {
         setUser(updatedProfile);
       }
@@ -348,29 +327,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    console.log('Logging out...');
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('Logout error:', error);
     }
-    setUser(null);
-    setAccessToken(null);
   };
 
-  const isAdmin = () => {
-    return user?.role === 'admin';
-  };
-
-  const isModerator = () => {
-    return user?.role === 'moderator' || user?.role === 'admin';
-  };
-
-  const hasPermission = (permission: string) => {
-    return user?.permissions?.includes(permission) || false;
-  };
-
-  const hasTag = (tagName: string) => {
-    return user?.tags?.some(tag => tag.tag_name === tagName) || false;
-  };
+  const isAdmin = () => user?.role === 'admin';
+  const isModerator = () => user?.role === 'moderator' || user?.role === 'admin';
+  const hasPermission = (permission: string) => user?.permissions?.includes(permission) || false;
+  const hasTag = (tagName: string) => user?.tags?.some(tag => tag.tag_name === tagName) || false;
 
   return (
     <AuthContext.Provider

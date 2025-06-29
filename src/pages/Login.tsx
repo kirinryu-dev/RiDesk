@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Login: React.FC = () => {
@@ -42,13 +42,12 @@ const Login: React.FC = () => {
         toast.success('Account created successfully!');
       } else {
         await login(email, password);
-        toast.success('Login successful!');
+        toast.success('Welcome back!');
       }
-      navigate('/dashboard');
+      // Navigation will happen automatically via useEffect when isAuthenticated changes
     } catch (error: any) {
       console.error('Auth error:', error);
-      toast.error(error.message || (isSignup ? 'Signup failed. Please try again.' : 'Login failed. Please check your credentials.'));
-    } finally {
+      toast.error(error.message || (isSignup ? 'Signup failed' : 'Login failed'));
       setIsLoading(false);
     }
   };
@@ -65,12 +64,12 @@ const Login: React.FC = () => {
     
     try {
       await resetPassword(resetEmail);
-      toast.success('Password reset email sent! Check your inbox.');
+      toast.success('Password reset email sent!');
       setShowForgotPassword(false);
       setResetEmail('');
     } catch (error: any) {
       console.error('Reset password error:', error);
-      toast.error(error.message || 'Failed to send reset email. Please try again.');
+      toast.error(error.message || 'Failed to send reset email');
     } finally {
       setIsResetting(false);
     }
@@ -149,6 +148,19 @@ const Login: React.FC = () => {
             {isSignup ? 'Join our platform' : 'Enter your credentials to access the platform'}
           </p>
         </div>
+
+        {/* Quick Demo Notice */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <AlertCircle className="h-5 w-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-sm font-medium text-blue-800">Quick Demo</h3>
+              <p className="text-sm text-blue-700 mt-1">
+                Use any email and password (6+ chars) to create an account instantly
+              </p>
+            </div>
+          </div>
+        </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
@@ -181,7 +193,7 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
+                placeholder="Password (6+ characters)"
                 minLength={6}
               />
             </div>
