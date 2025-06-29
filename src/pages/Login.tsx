@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 import { ExternalLink, Loader2, AlertCircle, Bug, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DebugLogin from '../components/DebugLogin';

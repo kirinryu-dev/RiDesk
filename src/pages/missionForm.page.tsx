@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { GitBranch, Tags, Clock, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 
 const missionSchema = z.object({
   title: z.string().min(10, 'Title must be at least 10 characters'),

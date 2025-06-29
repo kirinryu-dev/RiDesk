@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,

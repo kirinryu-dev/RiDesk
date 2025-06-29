@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, DollarSign, Tags, Search, Filter, ChevronDown } from 'lucide-react';
 import { useMissions } from '../hooks/useOptimizedQuery';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 
 interface Mission {
   id: string;

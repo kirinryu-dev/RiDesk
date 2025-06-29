@@ -1,7 +1,7 @@
 import React from 'react';
 import { stripeProducts } from '../stripe-config';
 import PricingCard from '../components/PricingCard';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 import { Navigate } from 'react-router-dom';
 
 const Pricing: React.FC = () => {

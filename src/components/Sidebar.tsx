@@ -17,7 +17,7 @@ import {
   FileText,
   Zap
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 
 const Sidebar: React.FC = () => {
   const { logout, user, isAdmin, isModerator, hasPermission, hasTag } = useAuth();

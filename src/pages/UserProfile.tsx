@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 import { Save, User, Bell, Lock, Github, GitBranch, AlertCircle, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SubscriptionStatus from '../components/SubscriptionStatus';

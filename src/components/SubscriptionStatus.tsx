@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 import { Crown, Calendar, CreditCard, AlertCircle } from 'lucide-react';
 import { getProductByPriceId } from '../stripe-config';
 

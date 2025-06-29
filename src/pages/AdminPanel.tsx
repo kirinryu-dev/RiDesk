@@ -13,7 +13,7 @@ import {
   Search
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 import toast from 'react-hot-toast';
 
 const supabase = createClient(

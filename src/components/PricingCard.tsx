@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { StripeProduct } from '../stripe-config';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/OptimizedAuthContext';
 import toast from 'react-hot-toast';
 
 interface PricingCardProps {
