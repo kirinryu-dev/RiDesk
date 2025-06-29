@@ -24,10 +24,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const supabase: SupabaseClient = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+// Validate environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+}
+
+const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -163,17 +168,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetPassword = async (email: string) => {
     try {
+      // Add timeout and better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`
       });
 
+      clearTimeout(timeoutId);
+
       if (error) {
         console.error('Password reset error:', error);
-        throw new Error(error.message || 'Failed to send reset email');
+        // Provide more specific error messages
+        if (error.message.includes('rate limit')) {
+          throw new Error('Too many reset attempts. Please wait a few minutes before trying again.');
+        } else if (error.message.includes('invalid email')) {
+          throw new Error('Please enter a valid email address.');
+        } else {
+          throw new Error(error.message || 'Failed to send reset email');
+        }
       }
     } catch (error: any) {
       console.error('Password reset failed:', error);
-      throw new Error(error.message || 'Failed to send reset email. Please try again.');
+      
+      // Handle network errors specifically
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out. Please check your internet connection and try again.');
+      } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      } else {
+        throw new Error(error.message || 'Failed to send reset email. Please try again.');
+      }
     }
   };
 
